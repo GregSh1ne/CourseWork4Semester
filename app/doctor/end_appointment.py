@@ -1,7 +1,7 @@
+# app/doctor/end_appointment.py
 import tkinter as tk
 from tkinter import ttk, messagebox
 from config import COLUMN_WIDTHS, FONT_SIZE
-
 
 class EndAppointmentWindow(tk.Toplevel):
     def __init__(self, app):

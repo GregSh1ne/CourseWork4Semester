@@ -1,5 +1,5 @@
 import tkinter as tk
-from app.auth import AuthWindow
+from app.auth.auth_window import AuthWindow
 from app.main_menu import MainMenu
 from config import FONT_SIZE, COLUMN_WIDTHS, TABLE_ROW_HEIGHT
 
@@ -13,7 +13,13 @@ class MainApplication:
         # Инициализация стилей
         self.style = tk.ttk.Style()
         self.style.configure('.', font=('Arial', FONT_SIZE))
-        self.style.configure('Treeview', rowheight=TABLE_ROW_HEIGHT)
+        self.style.configure(
+            'Treeview', 
+            font=('Arial', FONT_SIZE),
+            rowheight=TABLE_ROW_HEIGHT,
+            background='#ffffff',
+            fieldbackground='#ffffff'
+        )
         self.style.configure('TButton', padding=10)
         self.style.map('TButton', 
             foreground=[('active', 'black'), ('!disabled', 'black')],
