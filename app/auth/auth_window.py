@@ -46,9 +46,11 @@ class AuthWindow(tk.Toplevel):
                 self.app.show_main_menu("Врач")
             elif phone == "registry" and password == "1234":
                 self.app.show_main_menu("Регистратура")
-            else:
+            elif phone == "patient" and password == "1234":
                 self.app.show_main_menu("Пациент")
-            self.destroy()
+            else:
+                messagebox.showerror("Ошибка", "Такой пользователь не найден")
+                #self.destroy()
         else:
             messagebox.showerror("Ошибка", "Заполните все поля")
     

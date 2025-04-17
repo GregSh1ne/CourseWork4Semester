@@ -97,8 +97,27 @@ class MainMenu(tk.Toplevel):
         btn_frame.pack(pady=20)
         
         ttk.Button(btn_frame, text="Добавить врача", command=self.open_add_doctor, width=25).pack(side=tk.LEFT, padx=15)
+        ttk.Button(btn_frame, text="Удалить врача", command=self.delete_doctor, width=25).pack(side=tk.LEFT, padx=15)
         ttk.Button(btn_frame, text="Посмотреть услуги", command=self.open_services_window, width=25).pack(side=tk.LEFT, padx=15)
         ttk.Button(btn_frame, text="Выход", command=self.logout, width=25).pack(side=tk.LEFT, padx=15)
+
+    def delete_doctor(self):
+        selected = self.tree.selection()
+        if not selected:
+            messagebox.showwarning("Предупреждение", "Выберите врача для удаления")
+            return
+        
+        item_values = self.tree.item(selected[0], 'values')
+        
+        doctor_id = item_values[0]
+        self.admin_data = [doc for doc in self.admin_data if doc[0] != doctor_id]
+        
+        self.tree.delete(selected[0])
+        
+        self.filter_admin_table()
+        
+        messagebox.showinfo("Успех", "Врач успешно удалён")
+
 
     def filter_admin_table(self, event=None):
         query_last = self.last_name_search.get().lower()
@@ -383,7 +402,6 @@ class MainMenu(tk.Toplevel):
                 command=self.logout).pack(side=tk.LEFT, padx=10)
 
     def filter_registry_table(self, event=None):
-        """Фильтрация данных в таблице"""
         search_params = {
             "ID приема:": self.search_entries["ID приема:"].get().lower(),
             "Специалист:": self.search_entries["Специалист:"].get().lower(),

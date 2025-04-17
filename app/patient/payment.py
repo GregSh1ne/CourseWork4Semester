@@ -72,7 +72,7 @@ class PaymentSelectionWindow(tk.Toplevel):
         self.app = app
         self.callback = callback
         self.title("Выбор услуг для оплаты")
-        self.geometry("600x400")
+        self.geometry("1200x800")
         
         # Таблица услуг
         self.tree = ttk.Treeview(self, columns=("Услуга", "Цена"), show="headings")

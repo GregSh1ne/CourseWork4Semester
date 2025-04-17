@@ -74,7 +74,20 @@ class ServicesWindow(tk.Toplevel):
         btn_frame.pack(pady=20)
         
         ttk.Button(btn_frame, text="Добавить услугу", command=self.open_add_service, width=25).pack(side=tk.LEFT, padx=15)
+        ttk.Button(btn_frame, text="Удалить услугу", command=self.delete_service, width=25).pack(side=tk.LEFT, padx=15)
         ttk.Button(btn_frame, text="Назад", command=self.destroy, width=25).pack(side=tk.LEFT, padx=15)
+
+    def delete_service(self):
+        selected = self.tree.selection()
+        if not selected:
+            return
+        
+        # Удаление из данных
+        item_id = self.tree.item(selected[0], 'values')[0]
+        for child in self.tree.get_children():
+            if self.tree.item(child, 'values')[0] == item_id:
+                self.tree.delete(child)
+                break
 
     def filter_services(self, event=None):
         query_name = self.name_search.get().lower()

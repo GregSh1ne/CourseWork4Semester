@@ -8,7 +8,7 @@ class RegistrationWindow(tk.Toplevel):
         super().__init__()
         self.app = app
         self.title("Регистрация пациента")
-        self.geometry("900x1800")
+        self.geometry("900x1200")
         
         main_frame = ttk.Frame(self)
         main_frame.pack(pady=40, padx=40, fill=tk.BOTH, expand=True)
