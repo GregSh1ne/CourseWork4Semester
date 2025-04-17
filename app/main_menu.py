@@ -75,22 +75,19 @@ class MainMenu(tk.Toplevel):
         for col in ("№", "ФИО", "Специализация", "Квалификация", "Телефон"):
             self.tree.heading(col, text=col)
         
-        # Тестовые данные
-        self.admin_data = []
-        for i in range(1, 11):
-            self.admin_data.append((
-                i,
-                f"Иванов Иван Иванович {i}",
-                ["Терапевт", "Хирург", "Офтальмолог"][i%3],
-                f"Высшая категория {i}",
-                f"+7 (999) 123-45-{i:02d}"
-            ))
+        # Загрузите данные из CSV
+        from app.database import read_csv
+        doctors = read_csv("doctors.csv")
         
         # Добавление данных в таблицу
-        for doctor in self.admin_data:
-            self.tree.insert("", "end", values=doctor)
-        
-        self.tree.pack(fill=tk.BOTH, expand=True)
+        for doc in doctors:
+            self.tree.insert("", "end", values=(
+                doc["doctor_id"],
+                f"{doc['surname']} {doc['name']} {doc['patronymic']}",
+                doc["specialization"],
+                doc["qualification"],
+                doc["phone"]
+            ))
         
         # Кнопки
         btn_frame = ttk.Frame(parent)
@@ -106,36 +103,54 @@ class MainMenu(tk.Toplevel):
         if not selected:
             messagebox.showwarning("Предупреждение", "Выберите врача для удаления")
             return
-        
+
+        # Получите ID выбранного врача
         item_values = self.tree.item(selected[0], 'values')
-        
         doctor_id = item_values[0]
-        self.admin_data = [doc for doc in self.admin_data if doc[0] != doctor_id]
-        
+
+        # Загрузите данные из CSV
+        from app.database import read_csv, write_csv
+        doctors = read_csv("doctors.csv")
+
+        # Удалите врача
+        updated_doctors = [doc for doc in doctors if doc["doctor_id"] != doctor_id]
+
+        # Сохраните изменения
+        write_csv("doctors.csv", updated_doctors)
+
+        # Обновите таблицу
         self.tree.delete(selected[0])
-        
-        self.filter_admin_table()
-        
         messagebox.showinfo("Успех", "Врач успешно удалён")
 
 
     def filter_admin_table(self, event=None):
+        from app.database import read_csv
+        doctors = read_csv("doctors.csv")
+
         query_last = self.last_name_search.get().lower()
         query_first = self.first_name_search.get().lower()
         query_phone = self.phone_search.get().lower()
         query_spec = self.spec_search.get().lower()
 
         self.tree.delete(*self.tree.get_children())
-        for doctor in self.admin_data:
-            parts = doctor[1].split()
-            last_name = parts[0].lower() if len(parts) > 0 else ""
-            first_name = parts[1].lower() if len(parts) > 1 else ""
+        
+        for doc in doctors:
+            full_name = f"{doc['surname']} {doc['name']} {doc['patronymic']}".lower()
+            last_name = doc["surname"].lower()
+            first_name = doc["name"].lower()
             
             if (query_last in last_name and
                 query_first in first_name and
-                query_phone in str(doctor[3]).lower() and
-                query_spec in doctor[2].lower()):
-                self.tree.insert("", "end", values=doctor)
+                query_phone in doc["phone"].lower() and
+                query_spec in doc["specialization"].lower()):
+                
+                self.tree.insert("", "end", values=(
+                    doc["doctor_id"],
+                    f"{doc['surname']} {doc['name']} {doc['patronymic']}",
+                    doc["specialization"],
+                    doc["qualification"],
+                    doc["phone"]
+                ))
 
     # --- ИНТЕРФЕЙС ВРАЧА ---
     def show_doctor_interface(self, parent):

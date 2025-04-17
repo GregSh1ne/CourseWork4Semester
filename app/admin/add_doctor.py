@@ -1,6 +1,7 @@
 # app/admin/add_doctor.py
 import tkinter as tk
 from tkinter import ttk, messagebox
+from app.database import read_csv, write_csv, get_next_id
 from config import COLUMN_WIDTHS, FONT_SIZE
 
 class AddDoctorWindow(tk.Toplevel):
@@ -21,13 +22,14 @@ class AddDoctorWindow(tk.Toplevel):
         
         # Поля формы
         fields = [
-            ("Фамилия", 0),
-            ("Имя", 1),
-            ("Отчество", 2),
-            ("Телефон", 3),
-            ("Специализация", 4),
-            ("Квалификация", 5),
-            ("Номер кабинета", 6)
+        ("Фамилия", 0),
+        ("Имя", 1),
+        ("Отчество", 2),
+        ("Телефон", 3),
+        ("Пароль", 4),  # Новое поле
+        ("Специализация", 5),
+        ("Квалификация", 6),
+        ("Номер кабинета", 7)
         ]
         
         self.entries = {}
@@ -52,31 +54,60 @@ class AddDoctorWindow(tk.Toplevel):
         ttk.Button(btn_frame, text="Отмена", command=self.destroy, width=25).pack(side=tk.LEFT, padx=15)
     
     def save_doctor(self):
+        # Сбор данных из полей ввода
         data = {
-            'Фамилия': self.entries['Фамилия'].get(),
-            'Имя': self.entries['Имя'].get(),
-            'Отчество': self.entries['Отчество'].get(),
-            'Телефон': self.entries['Телефон'].get(),
-            'Специализация': self.entries['Специализация'].get(),
-            'Квалификация': self.entries['Квалификация'].get(),
-            'Номер кабинета': self.entries['Номер кабинета'].get()
+            "surname": self.entries["Фамилия"].get().strip(),
+            "name": self.entries["Имя"].get().strip(),
+            "patronymic": self.entries["Отчество"].get().strip(),
+            "phone": self.entries["Телефон"].get().strip(),
+            "password": self.entries["Пароль"].get().strip(),  # Новое поле
+            "specialization": self.entries["Специализация"].get().strip(),
+            "qualification": self.entries["Квалификация"].get().strip(),
+            "office": self.entries["Номер кабинета"].get().strip()
         }
-        
+
         # Валидация данных
         errors = []
-        if not data['Фамилия'] or not data['Имя']:
-            errors.append("ФИО обязательно для заполнения")
+        if not data["surname"] or not data["name"]:
+            errors.append("Фамилия и имя обязательны для заполнения.")
         
-        if not data['Телефон'].isdigit() or len(data['Телефон']) != 11:
-            errors.append("Некорректный номер телефона (11 цифр)")
+        # Очистка номера телефона и проверка формата
+        phone = data["phone"]
+        cleaned_phone = "".join(filter(lambda c: c.isdigit() or c == "+", phone))
         
-        if not data['Номер кабинета'].isdigit():
-            errors.append("Номер кабинета должен быть числом")
+        # Проверка формата: +7XXXXXXXXXX (12 символов)
+        if (
+            not cleaned_phone.startswith("+7") 
+            or len(cleaned_phone) != 12 
+            or not cleaned_phone[1:].isdigit()
+        ):
+            errors.append("Некорректный номер телефона. Формат: +7XXXXXXXXXX")
+        else:
+            data["phone"] = cleaned_phone  # Сохраняем очищенный номер
         
+        if not data["password"]:
+            errors.append("Пароль не может быть пустым.")
+        if not data["office"].isdigit():
+            errors.append("Номер кабинета должен быть числом.")
+
         if errors:
             messagebox.showerror("Ошибка", "\n".join(errors))
             return
-        
-        # Здесь должна быть логика сохранения в БД
-        messagebox.showinfo("Успех", "Врач успешно добавлен!")
-        self.destroy()
+
+        try:
+            # Чтение существующих данных
+            doctors = read_csv("doctors.csv")
+            # Генерация нового ID
+            new_id = get_next_id("doctors.csv")
+            # Создание записи врача
+            new_doctor = {
+                "doctor_id": new_id,
+                **data
+            }
+            doctors.append(new_doctor)
+            # Сохранение в CSV
+            write_csv("doctors.csv", doctors)
+            messagebox.showinfo("Успех", "Врач успешно добавлен!")
+            self.destroy()
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось сохранить данные: {str(e)}")
