@@ -1,5 +1,7 @@
 # app/admin/services.py
 import tkinter as tk
+import csv
+from app.database import read_csv, write_csv, get_next_id
 from tkinter import ttk, messagebox
 from config import COLUMN_WIDTHS, FONT_SIZE
 from .add_doctor import AddDoctorWindow  # если требуется
@@ -34,19 +36,9 @@ class ServicesWindow(tk.Toplevel):
         self.tree.heading("Цена", text="Цена (руб)")
         self.tree.heading("Кабинет", text="Кабинет")
         
-        # Тестовые данные
-        for i in range(1, 16):
-            self.tree.insert(
-                "", 
-                "end", 
-                values=(
-                    i,
-                    f"Медицинская услуга {i}",
-                    f"{1500 + i*100}",
-                    f"{200 + i}"
-                )
-            )
-        
+        # Заменяем тестовые данные на загрузку из CSV
+        self.load_services_from_csv()
+
         self.tree.pack(fill=tk.BOTH, expand=True)
         
         # Поля поиска
@@ -82,12 +74,28 @@ class ServicesWindow(tk.Toplevel):
         if not selected:
             return
         
-        # Удаление из данных
-        item_id = self.tree.item(selected[0], 'values')[0]
-        for child in self.tree.get_children():
-            if self.tree.item(child, 'values')[0] == item_id:
-                self.tree.delete(child)
-                break
+        service_id = self.tree.item(selected[0], 'values')[0]
+        
+        try:
+            # Чтение и обновление данных
+            with open('app/data/services.csv', 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                services = list(reader)
+            
+            # Фильтрация услуг
+            updated_services = [s for s in services if s['service_id'] != service_id]
+            
+            # Запись обратно в файл
+            with open('app/data/services.csv', 'w', encoding='utf-8', newline='') as f:
+                writer = csv.DictWriter(f, fieldnames=reader.fieldnames)
+                writer.writeheader()
+                writer.writerows(updated_services)
+            
+            # Обновление таблицы
+            self.tree.delete(selected[0])
+            
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось удалить услугу: {str(e)}")
 
     def filter_services(self, event=None):
         query_name = self.name_search.get().lower()
@@ -95,20 +103,39 @@ class ServicesWindow(tk.Toplevel):
         max_p = self.max_price.get()
 
         self.tree.delete(*self.tree.get_children())
-        for i in range(1, 16):
-            price = 1500 + i * 100
-            if (query_name in f"Медицинская услуга {i}".lower() and
-                (min_p == "" or price >= float(min_p or 0)) and
-                (max_p == "" or price <= float(max_p or float('inf')))):
-                self.tree.insert("", "end", values=(
-                    i,
-                    f"Медицинская услуга {i}",
-                    f"{price}",
-                    f"{200 + i}"
-                ))
+        with open('app/data/services.csv', 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                price = float(row['price'])
+                min_price = float(min_p) if min_p else 0
+                max_price = float(max_p) if max_p else float('inf')
+                
+                if (query_name in row['service_name'].lower() and
+                    price >= min_price and 
+                    price <= max_price):
+                    self.tree.insert("", "end", values=(
+                        row['service_id'],
+                        row['service_name'],
+                        row['price'],
+                        row['office']
+                    ))
 
     def open_add_service(self):
         AddServiceWindow(self.app)
+
+    def load_services_from_csv(self):
+        try:
+            with open('app/data/services.csv', 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    self.tree.insert("", "end", values=(
+                        row['service_id'],
+                        row['service_name'],
+                        row['price'],
+                        row['office']
+                    ))
+        except FileNotFoundError:
+            messagebox.showerror("Ошибка", "Файл услуг не найден")
 
 class AddServiceWindow(tk.Toplevel):
     def __init__(self, app):
@@ -153,18 +180,36 @@ class AddServiceWindow(tk.Toplevel):
     
     def submit(self):
         data = {
-            'Название услуги': self.entries['Название услуги'].get(),
-            'Цена (руб)': self.entries['Цена (руб)'].get(),
-            'Кабинет': self.entries['Кабинет'].get(),
-            'Описание': self.description_entry.get("1.0", tk.END).strip()
+            'service_name': self.entries['Название услуги'].get(),
+            'price': self.entries['Цена (руб)'].get(),
+            'office': self.entries['Кабинет'].get(),
+            'description': self.description_entry.get("1.0", tk.END).strip()
         }
         
-        if all(data.values()):
-            try:
-                float(data['Цена (руб)'])
-                messagebox.showinfo("Успех", "Услуга успешно добавлена!")
-                self.destroy()
-            except ValueError:
-                messagebox.showerror("Ошибка", "Некорректный формат цены")
-        else:
-            messagebox.showerror("Ошибка", "Все поля обязательны для заполнения")
+        if not all([data['service_name'], data['price'], data['office']]):
+            messagebox.showerror("Ошибка", "Обязательные поля: Название, Цена, Кабинет")
+            return
+        
+        try:
+            # Генерация нового ID
+            services = read_csv("services.csv")
+            new_id = get_next_id("services.csv")
+            
+            # Создание новой записи
+            new_service = {
+                'service_id': new_id,
+                'service_name': data['service_name'],
+                'price': data['price'],
+                'office': data['office']
+            }
+            
+            services.append(new_service)
+            write_csv("services.csv", services)
+            
+            messagebox.showinfo("Успех", "Услуга успешно добавлена!")
+            self.destroy()
+            
+        except ValueError:
+            messagebox.showerror("Ошибка", "Некорректный формат цены")
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Ошибка сохранения: {str(e)}")

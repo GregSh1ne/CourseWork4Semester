@@ -2,85 +2,112 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import datetime
+from app.database import read_csv, write_csv, get_next_id
 from config import COLUMN_WIDTHS, FONT_SIZE
 
 class BookAppointmentWindow(tk.Toplevel):
-    def __init__(self, app):
+    def __init__(self, main_menu):
         super().__init__()
-        self.app = app
+        self.main_menu = main_menu
         self.title("Запись на прием")
-        self.geometry("1200x800")
+        self.geometry("600x400")
         
         main_frame = ttk.Frame(self)
-        main_frame.pack(pady=40, padx=40, fill=tk.BOTH, expand=True)
-        
-        ttk.Label(main_frame, text="Запись на прием к врачу", 
-                 font=('Arial', FONT_SIZE+2)).pack(pady=20)
-        
-        form_frame = ttk.Frame(main_frame)
-        form_frame.pack(pady=20)
+        main_frame.pack(pady=20, padx=20, fill=tk.BOTH, expand=True)
         
         # Выбор врача
-        ttk.Label(form_frame, text="Выберите врача:").grid(row=0, column=0, padx=15, pady=15, sticky='e')
-        self.doctor_var = tk.StringVar()
-        self.doctor_combobox = ttk.Combobox(
-            form_frame, 
-            textvariable=self.doctor_var,
-            values=[f"Доктор {i} ({spec})" for i, spec in enumerate(["Терапевт", "Хирург", "Кардиолог"], 1)],
-            width=40
-        )
-        self.doctor_combobox.grid(row=0, column=1, padx=15, pady=15)
+        ttk.Label(main_frame, text="Врач:").grid(row=0, column=0, sticky='w', pady=5)
+        self.doctor_combo = ttk.Combobox(main_frame, state="readonly")
+        self.doctor_combo.grid(row=0, column=1, sticky='ew', pady=5)
         
         # Выбор услуги
-        ttk.Label(form_frame, text="Выберите услугу:").grid(row=1, column=0, padx=15, pady=15, sticky='e')
-        self.service_var = tk.StringVar()
-        self.service_combobox = ttk.Combobox(
-            form_frame, 
-            textvariable=self.service_var,
-            values=[f"Консультация {i} ({500+i*100} руб.)" for i in range(1, 6)],
-            width=40
-        )
-        self.service_combobox.grid(row=1, column=1, padx=15, pady=15)
+        ttk.Label(main_frame, text="Услуга:").grid(row=1, column=0, sticky='w', pady=5)
+        self.service_combo = ttk.Combobox(main_frame, state="readonly")
+        self.service_combo.grid(row=1, column=1, sticky='ew', pady=5)
         
-        # Выбор даты и времени
-        ttk.Label(form_frame, text="Дата приема:").grid(row=2, column=0, padx=15, pady=15, sticky='e')
-        self.date_entry = ttk.Entry(form_frame, width=20)
-        self.date_entry.grid(row=2, column=1, padx=15, pady=15)
-        self.date_entry.insert(0, datetime.now().strftime("%d.%m.%Y"))
+        # Дата приема
+        ttk.Label(main_frame, text="Дата (ДД.ММ.ГГГГ):").grid(row=2, column=0, sticky='w', pady=5)
+        self.date_entry = ttk.Entry(main_frame)
+        self.date_entry.grid(row=2, column=1, sticky='ew', pady=5)
         
-        ttk.Label(form_frame, text="Время приема:").grid(row=3, column=0, padx=15, pady=15, sticky='e')
-        self.time_combobox = ttk.Combobox(
-            form_frame, 
-            values=[f"{h:02d}:{m:02d}" for h in range(8, 20) for m in [0, 30]],
-            width=10
-        )
-        self.time_combobox.grid(row=3, column=1, padx=15, pady=15)
-        self.time_combobox.set("10:00")
-
-        # Кнопки
-        btn_frame = ttk.Frame(main_frame)
-        btn_frame.pack(pady=20)
+        # Время приема
+        ttk.Label(main_frame, text="Время (ЧЧ:ММ):").grid(row=3, column=0, sticky='w', pady=5)
+        self.time_entry = ttk.Entry(main_frame)
+        self.time_entry.grid(row=3, column=1, sticky='ew', pady=5)
         
-        ttk.Button(btn_frame, text="Записать", 
-                  command=self.book_appointment, width=15).pack(side=tk.LEFT, padx=15)
-        ttk.Button(btn_frame, text="Назад", 
-                  command=self.destroy, width=15).pack(side=tk.LEFT, padx=15)
+        # Кнопка записи
+        ttk.Button(main_frame, text="Записаться", command=self.submit).grid(row=4, column=0, columnspan=2, pady=20)
+        
+        # Загрузка данных
+        self.load_doctors()
+        self.load_services()
     
-    def book_appointment(self):
-        data = {
-            'doctor': self.doctor_var.get(),
-            'service': self.service_var.get(),
-            'date': self.date_entry.get(),
-            'time': self.time_combobox.get()
-        }
+
+    def load_doctors(self):
+        doctors = read_csv("doctors.csv")
+        doctor_list = [
+            f"{d['surname']} {d['name']} ({d['specialization']})" 
+            for d in doctors
+        ]
+        self.doctor_combo['values'] = doctor_list
+        if doctor_list:
+            self.doctor_combo.current(0)
+
+    def load_services(self):
+        services = read_csv("services.csv")
+        service_list = [f"{s['service_name']} ({s['price']} руб.)" for s in services]
+        self.service_combo['values'] = service_list
+        if service_list:
+            self.service_combo.current(0)
+
+    def submit(self):
+        # Получение данных
+        doctor_str = self.doctor_combo.get()
+        service_str = self.service_combo.get()
+        date = self.date_entry.get().strip()
+        time = self.time_entry.get().strip()
         
-        if all(data.values()):
-            try:
-                datetime.strptime(data['date'], "%d.%m.%Y")
-                datetime.strptime(data['time'], "%H:%M")
-                messagebox.showinfo("Успех", "Вы успешно записаны на прием!")
-                self.destroy()
-            except ValueError:
-                messagebox.showerror("Ошибка", "Некорректный формат даты или времени")
-        else:
+        # Валидация
+        if not all([doctor_str, service_str, date, time]):
             messagebox.showerror("Ошибка", "Заполните все поля")
+            return
+            
+        # Парсинг данных
+        try:
+            doctors = read_csv("doctors.csv")
+            services = read_csv("services.csv")
+            
+            # Получаем ID врача
+            doctor_name = doctor_str.split(' (')[0]
+            doctor = next(
+                d for d in doctors 
+                if f"{d['surname']} {d['name']}" == doctor_name
+            )
+            
+            # Получаем ID услуги
+            service_name = service_str.split(' (')[0]
+            service = next(s for s in services if s['service_name'] == service_name)
+            
+            # Создаем запись
+            new_appointment = {
+                "appointment_id": get_next_id("appointments.csv"),
+                "patient_id": self.main_menu.app.current_user['patient_id'],
+                "doctor_id": doctor['doctor_id'],
+                "service_id": service['service_id'],
+                "date": date,
+                "time": time,
+                "status": "Ожидается",
+                "office": doctor['office']
+            }
+            
+            # Сохранение в CSV
+            appointments = read_csv("appointments.csv")
+            appointments.append(new_appointment)
+            write_csv("appointments.csv", appointments)
+            
+            messagebox.showinfo("Успех", "Запись успешно создана!")
+            self.destroy()
+            self.main_menu.load_patient_appointments()  # Обновляем через main_menu
+            
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Ошибка при записи: {str(e)}")

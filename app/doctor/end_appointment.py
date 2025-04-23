@@ -1,41 +1,63 @@
 # app/doctor/end_appointment.py
 import tkinter as tk
 from tkinter import ttk, messagebox
+from app.database import read_csv, write_csv, get_next_id
 from config import COLUMN_WIDTHS, FONT_SIZE
 
 class EndAppointmentWindow(tk.Toplevel):
-    def __init__(self, app):
+    def __init__(self, main_menu, appointment_id):  # Правильные параметры
         super().__init__()
-        self.app = app
+        self.main_menu = main_menu  # Сохраняем ссылку на MainMenu
+        self.appointment_id = appointment_id
         self.title("Завершение приема")
-        self.geometry("1200x1000")
+        self.geometry("600x400")
         
         main_frame = ttk.Frame(self)
-        main_frame.pack(pady=40, padx=40, fill=tk.BOTH, expand=True)
+        main_frame.pack(pady=20, padx=20, fill=tk.BOTH, expand=True)
         
-        ttk.Label(main_frame, text="Завершение приема", 
-                 font=('Arial', FONT_SIZE+2)).pack(pady=20)
+        # Диагноз
+        ttk.Label(main_frame, text="Диагноз:").grid(row=0, column=0, sticky='w', pady=5)
+        self.diagnosis_entry = ttk.Entry(main_frame, width=40)
+        self.diagnosis_entry.grid(row=0, column=1, sticky='ew', pady=5)
         
-        ttk.Label(main_frame, text="Диагноз:").pack(pady=10, anchor='w')
-        self.diagnosis_entry = tk.Text(main_frame, height=6, width=80, font=('Arial', FONT_SIZE))
-        self.diagnosis_entry.pack(pady=10)
+        # Рекомендации
+        ttk.Label(main_frame, text="Рекомендации:").grid(row=1, column=0, sticky='nw', pady=5)
+        self.recommendations_entry = tk.Text(main_frame, width=40, height=10)
+        self.recommendations_entry.grid(row=1, column=1, sticky='ew', pady=5)
         
-        ttk.Label(main_frame, text="Рекомендации:").pack(pady=10, anchor='w')
-        self.recommendations_entry = tk.Text(main_frame, height=10, width=80, font=('Arial', FONT_SIZE))
-        self.recommendations_entry.pack(pady=10)
-        
+        # Фрейм для кнопок
         btn_frame = ttk.Frame(main_frame)
-        btn_frame.pack(pady=20)
+        btn_frame.grid(row=2, column=0, columnspan=2, pady=10)
         
-        ttk.Button(btn_frame, text="Сохранить", command=self.submit, width=25).pack(side=tk.LEFT, padx=15)
-        ttk.Button(btn_frame, text="Назад", command=self.destroy, width=25).pack(side=tk.LEFT, padx=15)
-    
+        ttk.Button(btn_frame, text="Сохранить", command=self.submit).pack(side=tk.LEFT, padx=10)
+        ttk.Button(btn_frame, text="Назад", command=self.destroy).pack(side=tk.LEFT, padx=10)  # Новая кнопка
+
+
     def submit(self):
-        diagnosis = self.diagnosis_entry.get("1.0", tk.END).strip()
+        diagnosis = self.diagnosis_entry.get().strip()
         recommendations = self.recommendations_entry.get("1.0", tk.END).strip()
         
-        if diagnosis and recommendations:
-            messagebox.showinfo("Успех", "Прием успешно завершен!")
+        if not diagnosis:
+            messagebox.showerror("Ошибка", "Введите диагноз")
+            return
+            
+        try:
+            # Создаем новую запись диагноза
+            new_diagnosis = {
+                "diagnosis_id": get_next_id("diagnoses.csv"),
+                "appointment_id": self.appointment_id,
+                "diagnosis": diagnosis,
+                "recommendations": recommendations
+            }
+            
+            # Добавляем в CSV
+            diagnoses = read_csv("diagnoses.csv")
+            diagnoses.append(new_diagnosis)
+            write_csv("diagnoses.csv", diagnoses)
+            
+            messagebox.showinfo("Успех", "Прием успешно завершен")
             self.destroy()
-        else:
-            messagebox.showerror("Ошибка", "Заполните все поля")
+            self.main_menu.load_doctor_appointments()  # Теперь атрибут доступен
+            
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Ошибка сохранения: {str(e)}")

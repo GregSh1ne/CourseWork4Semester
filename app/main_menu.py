@@ -3,6 +3,7 @@ import tkinter as tk
 import random
 from tkinter import ttk, messagebox
 from config import COLUMN_WIDTHS, FONT_SIZE
+from app.database import read_csv, write_csv, get_next_id
 from app.admin import AddDoctorWindow, ServicesWindow  # Теперь импорт будет работать
 from app.doctor.end_appointment import EndAppointmentWindow
 from app.patient.book_appointment import BookAppointmentWindow
@@ -79,7 +80,7 @@ class MainMenu(tk.Toplevel):
         from app.database import read_csv
         doctors = read_csv("doctors.csv")
         
-        # Добавление данных в таблицу
+        # После добавления данных в таблицу
         for doc in doctors:
             self.tree.insert("", "end", values=(
                 doc["doctor_id"],
@@ -89,6 +90,9 @@ class MainMenu(tk.Toplevel):
                 doc["phone"]
             ))
         
+        # Добавьте эту строку
+        self.tree.pack(fill=tk.BOTH, expand=True)
+
         # Кнопки
         btn_frame = ttk.Frame(parent)
         btn_frame.pack(pady=20)
@@ -171,50 +175,51 @@ class MainMenu(tk.Toplevel):
         self.diagnosis_search.pack(side=tk.LEFT, padx=5)
         
         ttk.Label(search_frame, text="Тип:").pack(side=tk.LEFT, padx=5)
-        self.type_search = ttk.Combobox(search_frame, values=["Первичный", "Вторичный"])
+        self.type_search = ttk.Combobox(search_frame, values=["Все", "Первичный", "Вторичный"])
         self.type_search.pack(side=tk.LEFT, padx=5)
+        self.type_search.set("Все")
         
-        # Привязка событий
+        # Привязка событий фильтрации
         for widget in [self.date_search, self.time_search, self.diagnosis_search, self.type_search]:
             widget.bind("<KeyRelease>", self.filter_doctor_appointments)
+        self.type_search.bind("<<ComboboxSelected>>", self.filter_doctor_appointments)
 
         # Таблица
-        self.tree = ttk.Treeview(parent, columns=("№", "ID Приема", "Дата", "Время", "Тип приема", "Диагноз"), show="headings")
-        self.tree.column("№", width=COLUMN_WIDTHS['№'], anchor=tk.CENTER)
-        self.tree.column("ID Приема", width=COLUMN_WIDTHS['ID Приема'])
-        self.tree.column("Дата", width=COLUMN_WIDTHS['Дата'])
-        self.tree.column("Время", width=COLUMN_WIDTHS['Последний визит'])
-        self.tree.column("Тип приема", width=COLUMN_WIDTHS['Тип приема'])
-        self.tree.column("Диагноз", width=COLUMN_WIDTHS['Диагноз'])
+        self.tree = ttk.Treeview(parent, 
+            columns=("№", "ID Приема", "Пациент", "Дата", "Время", "Услуга", "Диагноз"), 
+            show="headings"
+        )
         
-        # Заголовки
-        for col in ("№", "ID Приема", "Дата", "Время", "Тип приема", "Диагноз"):
+        # Настройка колонок
+        columns_config = {
+            "№": 70,
+            "ID Приема": 100,
+            "Пациент": 200,
+            "Дата": 100,
+            "Время": 80,
+            "Услуга": 200,
+            "Диагноз": 300
+        }
+        
+        for col, width in columns_config.items():
+            self.tree.column(col, width=width, anchor=tk.CENTER)
             self.tree.heading(col, text=col)
         
-        # Тестовые данные
-        self.doctor_data = []
-        for i in range(1, 6):
-            self.doctor_data.append((
-                i,
-                f"{i + random.randint(1,100)}",
-                f"{i%28+1:02d}.07.2023",
-                f"10:{i%60:02d}",
-                ["Первичный", "Вторичный"][i%2],
-                f"ОРВИ {i}"
-            ))
-        
-        # Добавление данных в таблицу
-        for app in self.doctor_data:
-            self.tree.insert("", "end", values=app)
-        
+        # Загрузка данных
+        self.load_doctor_appointments()
         self.tree.pack(fill=tk.BOTH, expand=True)
+        
+        # Привязка двойного клика
+        self.tree.bind("<Double-1>", self.show_diagnosis_details)
         
         # Кнопки
         btn_frame = ttk.Frame(parent)
         btn_frame.pack(pady=20)
         
-        ttk.Button(btn_frame, text="Завершить прием", command=self.open_end_appointment, width=25).pack(side=tk.LEFT, padx=15)
-        ttk.Button(btn_frame, text="Выход", command=self.logout, width=25).pack(side=tk.LEFT, padx=15)
+        ttk.Button(btn_frame, text="Завершить прием", 
+                command=self.open_end_appointment, width=25).pack(side=tk.LEFT, padx=15)
+        ttk.Button(btn_frame, text="Выход", 
+                command=self.logout, width=25).pack(side=tk.LEFT, padx=15)
 
     def filter_doctor_appointments(self, event=None):
         query_date = self.date_search.get()
@@ -223,22 +228,136 @@ class MainMenu(tk.Toplevel):
         query_type = self.type_search.get().lower()
 
         self.tree.delete(*self.tree.get_children())
-        for app in self.doctor_data:
+        appointments = read_csv("appointments.csv")
+        for app in appointments:
             if (query_date in app[2] and
                 query_time in app[3] and
                 query_diagnosis in app[5].lower() and
                 query_type in app[4].lower()):
                 self.tree.insert("", "end", values=app)
+        
+    def load_doctor_appointments(self):
+        from app.database import read_csv
+        
+        appointments = read_csv("appointments.csv")
+        services = read_csv("services.csv")
+        patients = read_csv("patients.csv")
+        diagnoses = read_csv("diagnoses.csv")
+        
+        doctor_id = self.app.current_user['doctor_id']
+        
+        self.tree.delete(*self.tree.get_children())
+        for idx, appt in enumerate(appointments):
+            if appt.get('doctor_id') != doctor_id:
+                continue
+                
+            service = next(
+                (s for s in services if s['service_id'] == appt['service_id']),
+                {'service_name': 'Неизвестно'}
+            )
+            
+            patient = next(
+                (p for p in patients if p['patient_id'] == appt['patient_id']),
+                {'surname': '', 'name': ''}
+            )
+            
+            diagnosis = next(
+                (d for d in diagnoses if d['appointment_id'] == appt['appointment_id']),
+                {'diagnosis': 'Не завершен'}
+            )
+            
+            self.tree.insert("", "end", values=(
+                idx + 1,
+                appt['appointment_id'],
+                f"{patient['surname']} {patient['name']}".strip(),
+                appt['date'],
+                appt['time'],
+                service['service_name'],
+                diagnosis['diagnosis']
+            ))
+
+    def filter_doctor_appointments(self, event=None):
+        query_date = self.date_search.get()
+        query_time = self.time_search.get()
+        query_diagnosis = self.diagnosis_search.get().lower()
+        query_type = self.type_search.get()
+        
+        from app.database import read_csv
+        appointments = read_csv("appointments.csv")
+        services = read_csv("services.csv")
+        patients = read_csv("patients.csv")
+        diagnoses = read_csv("diagnoses.csv")
+        
+        doctor_id = self.app.current_user['doctor_id']
+        
+        self.tree.delete(*self.tree.get_children())
+        for idx, appt in enumerate(appointments):
+            if appt.get('doctor_id') != doctor_id:
+                continue
+                
+            service = next(
+                (s for s in services if s['service_id'] == appt['service_id']),
+                {'service_name': ''}
+            )
+            
+            patient = next(
+                (p for p in patients if p['patient_id'] == appt['patient_id']),
+                {'surname': '', 'name': ''}
+            )
+            
+            diagnosis = next(
+                (d for d in diagnoses if d['appointment_id'] == appt['appointment_id']),
+                {'diagnosis': ''}
+            )
+            
+            # Применение фильтров
+            date_match = query_date in appt['date'] if query_date else True
+            time_match = query_time in appt['time'] if query_time else True
+            diagnosis_match = query_diagnosis in diagnosis['diagnosis'].lower()
+            type_match = (query_type == "Все" or 
+                        (query_type == "Первичный" and diagnosis['diagnosis'] == '') or
+                        (query_type == "Вторичный" and diagnosis['diagnosis'] != ''))
+            
+            if date_match and time_match and diagnosis_match and type_match:
+                self.tree.insert("", "end", values=(
+                    idx + 1,
+                    appt['appointment_id'],
+                    f"{patient['surname']} {patient['name']}".strip(),
+                    appt['date'],
+                    appt['time'],
+                    service['service_name'],
+                    diagnosis['diagnosis'] or 'Не завершен'
+                ))
+
+    def show_diagnosis_details(self, event):
+        selected = self.tree.selection()
+        if not selected:
+            return
+        
+        appt_id = self.tree.item(selected[0], 'values')[1]
+        from app.database import read_csv
+        diagnoses = read_csv("diagnoses.csv")
+        diagnosis = next((d for d in diagnoses if d['appointment_id'] == appt_id), None)
+        
+        if diagnosis:
+            message = f"Диагноз: {diagnosis['diagnosis']}\n\nРекомендации:\n{diagnosis['recommendations']}"
+            messagebox.showinfo("Детали приема", message)
+        else:
+            messagebox.showinfo("Информация", "Прием еще не завершен")
 
 
     # --- ИНТЕРФЕЙС ПАЦИЕНТА ---
     def show_patient_interface(self, parent):
-        # Поля поиска
+        # Заголовок
+        ttk.Label(parent, text="Мои записи на прием", font=('Arial', FONT_SIZE+2)).pack(pady=10)
+        
+        # Фрейм поиска
         search_frame = ttk.Frame(parent)
         search_frame.pack(pady=10, fill=tk.X)
         
+        # Поля поиска
         ttk.Label(search_frame, text="Специализация:").pack(side=tk.LEFT, padx=5)
-        self.spec_search = ttk.Entry(search_frame, width=15)
+        self.spec_search = ttk.Entry(search_frame, width=20)
         self.spec_search.pack(side=tk.LEFT, padx=5)
         
         ttk.Label(search_frame, text="Дата (ДД.ММ.ГГГГ):").pack(side=tk.LEFT, padx=5)
@@ -246,17 +365,22 @@ class MainMenu(tk.Toplevel):
         self.date_search.pack(side=tk.LEFT, padx=5)
         
         ttk.Label(search_frame, text="Статус:").pack(side=tk.LEFT, padx=5)
-        self.status_search = ttk.Combobox(search_frame, values=["Ожидает оплаты", "Оплачено", "Ожидается прием"])
+        self.status_search = ttk.Combobox(search_frame, 
+                                        values=["Все", "Ожидается", "Оплачено", "Завершен"],
+                                        width=15)
         self.status_search.pack(side=tk.LEFT, padx=5)
+        self.status_search.set("Все")
         
-        # Привязка событий
+        # Привязка событий фильтрации
         for widget in [self.spec_search, self.date_search, self.status_search]:
             widget.bind("<KeyRelease>", self.filter_patient_appointments)
-
+        self.status_search.bind("<<ComboboxSelected>>", self.filter_patient_appointments)
+        
         # Таблица
-        self.tree = ttk.Treeview(parent, columns=("№", "Специалист", "Дата", "Время", "Кабинет", "Статус", "Цена", "ID Приема"), 
+        self.tree = ttk.Treeview(parent, 
+                            columns=("№", "Специалист", "Дата", "Время", "Кабинет", "Статус", "Цена", "ID Приема"), 
                             show="headings")
-    
+        
         # Настройка колонок
         columns_config = {
             "№": 70,
@@ -272,26 +396,13 @@ class MainMenu(tk.Toplevel):
         for col, width in columns_config.items():
             self.tree.column(col, width=width, anchor=tk.CENTER)
             self.tree.heading(col, text=col)
-
-        # Тестовые данные
-        self.appointments_data = []
-        for i in range(1, 11):
-            self.appointments_data.append((
-                i,
-                "Терапевт",
-                f"{i+10}.07.2023",
-                f"10:{i%60:02d}",
-                f"101",
-                ["Ожидается прием", "Оплачено", "Ожидает оплаты"][i%3],
-                "1500 руб.",
-                f"APT-{i}"
-            ))
-
-        # Добавление данных в таблицу
-        for app in self.appointments_data:
-            self.tree.insert("", "end", values=app)
         
+        # Загрузка данных
+        self.load_patient_appointments()
         self.tree.pack(fill=tk.BOTH, expand=True)
+        
+        # Привязка двойного клика
+        self.tree.bind("<Double-1>", self.show_appointment_details)
         
         # Кнопки
         btn_frame = ttk.Frame(parent)
@@ -305,53 +416,146 @@ class MainMenu(tk.Toplevel):
                 command=self.open_payment_selection, width=20).pack(side=tk.LEFT, padx=10)
         ttk.Button(btn_frame, text="Выход", 
                 command=self.logout, width=20).pack(side=tk.LEFT, padx=10)
-        
+
     def filter_patient_appointments(self, event=None):
         query_spec = self.spec_search.get().lower()
         query_date = self.date_search.get()
-        query_status = self.status_search.get().lower()
-
+        status_filter = self.status_search.get()
+        
+        from app.database import read_csv
+        appointments = read_csv("appointments.csv")
+        services = read_csv("services.csv")
+        doctors = read_csv("doctors.csv")
+        
+        patient_id = self.app.current_user['patient_id']
+        
         self.tree.delete(*self.tree.get_children())
-        for app in self.appointments_data:
-            if (query_spec in app[1].lower() and
-                (query_date == "" or query_date in app[2]) and
-                (query_status == "" or query_status in app[5].lower())):
-                self.tree.insert("", "end", values=app)
+        for idx, appt in enumerate(appointments):
+            if appt['patient_id'] != patient_id:
+                continue
+                
+            service = next((s for s in services if s['service_id'] == appt['service_id']), {})
+            doctor = next((d for d in doctors if d['doctor_id'] == appt['doctor_id']), {})
+            
+            # Применение фильтров
+            spec_match = query_spec in doctor.get('specialization', '').lower()
+            date_match = query_date in appt['date'] if query_date else True
+            status_match = (status_filter == "Все") or (appt['status'] == status_filter)
+            
+            if spec_match and date_match and status_match:
+                self.tree.insert("", "end", values=(
+                    idx+1,
+                    doctor.get('specialization', 'Неизвестно'),
+                    appt['date'],
+                    appt['time'],
+                    appt['office'],
+                    appt['status'],
+                    f"{service.get('price', '0')} руб.",
+                    appt['appointment_id']
+                ))
+
+    def load_patient_appointments(self):
+        from app.database import read_csv
+        appointments = read_csv("appointments.csv")
+        services = read_csv("services.csv")
+        doctors = read_csv("doctors.csv")
+        
+        patient_id = self.app.current_user['patient_id']
+        
+        self.tree.delete(*self.tree.get_children())
+        for idx, appt in enumerate(appointments):
+            if appt['patient_id'] != patient_id:
+                continue
+                
+            service = next((s for s in services if s['service_id'] == appt['service_id']), {})
+            doctor = next((d for d in doctors if d['doctor_id'] == appt['doctor_id']), {})
+            
+            self.tree.insert("", "end", values=(
+                idx+1,
+                doctor.get('specialization', 'Неизвестно'),
+                appt['date'],
+                appt['time'],
+                appt['office'],
+                appt['status'],
+                f"{service.get('price', '0')} руб.",
+                appt['appointment_id']
+            ))
 
     def show_appointment_details(self, event):
-        selected = self.tree.selection()
-        if selected:
-            item = self.tree.item(selected[0], 'values')
-            self.description_text.config(state='normal')
-            self.description_text.delete(1.0, tk.END)
-            self.description_text.insert(tk.END, item[8])  # 8 индекс - описание
-            self.description_text.config(state='disabled')
-
-    def cancel_appointment(self):
         selected = self.tree.selection()
         if not selected:
             return
         
-        item = self.tree.item(selected[0], 'values')
-        if item[5] != "Ожидается прием":
-            messagebox.showerror("Ошибка", "Можно отменять только приемы со статусом 'Ожидается прием'")
-            return
+        appt_id = self.tree.item(selected[0], 'values')[7]
+        from app.database import read_csv
+        diagnoses = read_csv("diagnoses.csv")
+        diagnosis = next((d for d in diagnoses if d['appointment_id'] == appt_id), None)
         
-        self.tree.delete(selected[0])
+        if diagnosis:
+            message = f"Диагноз: {diagnosis['diagnosis']}\n\nРекомендации:\n{diagnosis['recommendations']}"
+            messagebox.showinfo("Детали приема", message)
+        else:
+            messagebox.showinfo("Информация", "Прием еще не завершен врачом")
+
+    def cancel_appointment(self):
+        selected = self.tree.selection()
+        if not selected:
+            messagebox.showwarning("Ошибка", "Выберите запись для отмены")
+            return
+            
+        appt_id = self.tree.item(selected[0], 'values')[7]
+        
+        try:
+            from app.database import read_csv, write_csv
+            appointments = read_csv("appointments.csv")
+            
+            # Поиск и проверка записи
+            appointment = next((a for a in appointments if a['appointment_id'] == appt_id), None)
+            if not appointment:
+                messagebox.showerror("Ошибка", "Запись не найдена")
+                return
+                
+            if appointment['status'] != 'Ожидается':
+                messagebox.showwarning("Ошибка", "Можно отменять только записи со статусом 'Ожидается'")
+                return
+                
+            # Удаление записи
+            updated_appointments = [a for a in appointments if a['appointment_id'] != appt_id]
+            write_csv("appointments.csv", updated_appointments)
+            
+            # Обновление таблицы
+            self.load_patient_appointments()
+            messagebox.showinfo("Успех", "Запись успешно отменена")
+            
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Ошибка при отмене записи: {str(e)}")
 
     def open_payment_selection(self):
         selected = self.tree.selection()
-        if selected:
-            PaymentSelectionWindow(self.app, self.update_payment_status)
+        if not selected:
+            messagebox.showwarning("Ошибка", "Выберите запись для оплаты")
+            return
+            
+        appt_id = self.tree.item(selected[0], 'values')[7]  # ID в последнем столбце
+        from app.patient.payment import PaymentSelectionWindow
+        PaymentSelectionWindow(self, appt_id, self.update_payment_status)
 
-    def update_payment_status(self, appointment_id):
-        for child in self.tree.get_children():
-            if self.tree.item(child, 'values')[7] == appointment_id:
-                values = list(self.tree.item(child, 'values'))
-                values[5] = "Оплачено"
-                self.tree.item(child, values=values)
+    def update_payment_status(self, appt_id):
+        from app.database import read_csv, write_csv
+        appointments = read_csv("appointments.csv")
+        
+        for appt in appointments:
+            if appt['appointment_id'] == appt_id:
+                appt['status'] = 'Оплачено'
+                break
+        
+        write_csv("appointments.csv", appointments)
+        self.load_patient_appointments()
+        messagebox.showinfo("Обновлено", "Статус приема обновлен")
+
 
         # --- ИНТЕРФЕЙС Регистратуры ---
+    
     def show_registry_interface(self, parent):
         # Фрейм поиска
         search_frame = ttk.Frame(parent)
@@ -458,10 +662,17 @@ class MainMenu(tk.Toplevel):
         ServicesWindow(self.app)
 
     def open_end_appointment(self):
-        EndAppointmentWindow(self.app)
-
+        selected = self.tree.selection()
+        if not selected:
+            return
+        
+        appt_id = self.tree.item(selected[0], 'values')[1]
+        EndAppointmentWindow(self, appt_id)  # Передаем self (MainMenu), а не self.app
+    
+    # В классе MainMenu
     def open_book_appointment(self):
-        BookAppointmentWindow(self.app)
+        from app.patient.book_appointment import BookAppointmentWindow
+        BookAppointmentWindow(self)  # Передаем сам MainMenu вместо app
 
     def open_registry_appointment(self):
         RegistryAppointmentWindow(self.app)
@@ -469,4 +680,3 @@ class MainMenu(tk.Toplevel):
     def open_payment(self):
         PaymentWindow(self.app, self.update_payment_status_registry)
 
-    

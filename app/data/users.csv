@@ -1,0 +1,3 @@
+user_id,login,password,role,full_name,doctor_id,patient_id
+1,admin,admin123,Администратор,"Иванов И.И.",,
+2,registr,registr123,Регистратура,"Петрова А.С.",,
