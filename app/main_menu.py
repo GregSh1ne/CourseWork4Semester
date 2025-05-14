@@ -556,6 +556,7 @@ class MainMenu(tk.Toplevel):
 
         # --- ИНТЕРФЕЙС Регистратуры ---
     
+    # --- ИНТЕРФЕЙС РЕГИСТРАТУРЫ ---
     def show_registry_interface(self, parent):
         # Фрейм поиска
         search_frame = ttk.Frame(parent)
@@ -569,40 +570,36 @@ class MainMenu(tk.Toplevel):
             ttk.Label(search_frame, text=text).grid(row=0, column=i*2, padx=5)
             entry = ttk.Entry(search_frame, width=15)
             if "Специалист" in text:
-                entry = ttk.Combobox(search_frame, width=15, values=["Терапевт", "Хирург", "Кардиолог"])
+                entry = ttk.Combobox(search_frame, width=15)
+                entry['values'] = list(set(d['specialization'] for d in read_csv("doctors.csv")))
             elif "Время" in text:
                 entry = ttk.Combobox(search_frame, width=15, values=["09:00", "10:00", "11:00", "14:00"])
             entry.grid(row=0, column=i*2+1, padx=5)
             self.search_entries[text] = entry
 
         # Таблица
-        self.tree = ttk.Treeview(parent, columns=("ID приема", "Специалист", "Дата", "Время", "Кабинет", "Цена"), show="headings")
-        self.tree.heading("ID приема", text="ID приема")
-        self.tree.heading("Специалист", text="Специалист")
-        self.tree.heading("Дата", text="Дата")
-        self.tree.heading("Время", text="Время")
-        self.tree.heading("Кабинет", text="Кабинет")
-        self.tree.heading("Цена", text="Цена")
+        self.tree = ttk.Treeview(parent, 
+            columns=("ID", "Дата", "Время", "Специалист", "Пациент", "Статус", "Кабинет"), 
+            show="headings"
+        )
         
-        # Настройка ширины колонок
-        for col in ("ID приема", "Специалист", "Дата", "Время", "Кабинет", "Цена"):
-            self.tree.column(col, width=100, anchor=tk.CENTER)
+        # Настройка колонок
+        columns_config = {
+            "ID": 100,
+            "Дата": 100,
+            "Время": 80,
+            "Специалист": 200,
+            "Пациент": 200,
+            "Статус": 120,
+            "Кабинет": 100
+        }
         
+        for col, width in columns_config.items():
+            self.tree.column(col, width=width, anchor=tk.CENTER)
+            self.tree.heading(col, text=col)
+        
+        self.load_registry_appointments()
         self.tree.pack(fill=tk.BOTH, expand=True, pady=10)
-
-    # Заполнение таблицы тестовыми данными
-        self.registry_data = [
-            ("REG-1001", "Терапевт", "15.07.2023", "10:00", "101", "1500 руб"),
-            ("REG-1002", "Хирург", "15.07.2023", "11:00", "205", "2500 руб"),
-            ("REG-1003", "Кардиолог", "16.07.2023", "09:00", "312", "3000 руб"),
-            ("REG-1004", "Терапевт", "16.07.2023", "14:00", "102", "1500 руб"),
-            ("REG-1005", "Хирург", "17.07.2023", "10:30", "206", "2500 руб"),
-            ("REG-1006", "Терапевт", "17.07.2023", "11:30", "103", "1500 руб"),
-            ("REG-1007", "Кардиолог", "18.07.2023", "15:00", "313", "3000 руб"),
-        ]
-
-        for record in self.registry_data:
-            self.tree.insert("", "end", values=record)
 
         # Добавляем фильтрацию
         for entry in self.search_entries.values():
@@ -617,8 +614,32 @@ class MainMenu(tk.Toplevel):
                 command=self.open_registry_appointment).pack(side=tk.LEFT, padx=10)
         ttk.Button(btn_frame, text="Оплатить прием", 
                 command=self.open_payment).pack(side=tk.LEFT, padx=10)
+        ttk.Button(btn_frame, text="Обновить", 
+                command=lambda: self.load_registry_appointments()).pack(side=tk.LEFT, padx=10)
         ttk.Button(btn_frame, text="Выход", 
                 command=self.logout).pack(side=tk.LEFT, padx=10)
+
+    def load_registry_appointments(self):
+        self.tree.delete(*self.tree.get_children())
+        appointments = read_csv("appointments.csv")
+        patients = read_csv("patients.csv")
+        doctors = read_csv("doctors.csv")
+        services = read_csv("services.csv")
+        
+        for appt in appointments:
+            patient = next((p for p in patients if p['patient_id'] == appt['patient_id']), {'surname': 'Гость', 'name': ''})
+            doctor = next((d for d in doctors if d['doctor_id'] == appt['doctor_id']), {'specialization': 'Неизвестно'})
+            service = next((s for s in services if s['service_id'] == appt['service_id']), {'service_name': 'Неизвестно'})
+            
+            self.tree.insert("", "end", values=(
+                appt['appointment_id'],
+                appt['date'],
+                appt['time'],
+                doctor['specialization'],
+                f"{patient['surname']} {patient['name']}" if patient else "Гость",
+                appt['status'],
+                appt['office']
+            ))
 
     def filter_registry_table(self, event=None):
         search_params = {
@@ -629,21 +650,34 @@ class MainMenu(tk.Toplevel):
         }
 
         self.tree.delete(*self.tree.get_children())
+        appointments = read_csv("appointments.csv")
+        patients = read_csv("patients.csv")
+        doctors = read_csv("doctors.csv")
         
-        for record in self.registry_data:
+        for appt in appointments:
+            patient = next((p for p in patients if p['patient_id'] == appt['patient_id']), {'surname': '', 'name': ''})
+            doctor = next((d for d in doctors if d['doctor_id'] == appt['doctor_id']), {'specialization': ''})
+            
             match = True
-            # Проверяем соответствие каждому параметру поиска
-            if search_params["ID приема:"] and search_params["ID приема:"] not in record[0].lower():
+            if search_params["ID приема:"] and search_params["ID приема:"] not in appt['appointment_id'].lower():
                 match = False
-            if search_params["Специалист:"] and search_params["Специалист:"] not in record[1].lower():
+            if search_params["Специалист:"] and search_params["Специалист:"] not in doctor['specialization'].lower():
                 match = False
-            if search_params["Дата:"] and search_params["Дата:"] not in record[2].lower():
+            if search_params["Дата:"] and search_params["Дата:"] not in appt['date'].lower():
                 match = False
-            if search_params["Время:"] and search_params["Время:"] not in record[3].lower():
+            if search_params["Время:"] and search_params["Время:"] not in appt['time'].lower():
                 match = False
             
             if match:
-                self.tree.insert("", "end", values=record)
+                self.tree.insert("", "end", values=(
+                    appt['appointment_id'],
+                    appt['date'],
+                    appt['time'],
+                    doctor['specialization'],
+                    f"{patient['surname']} {patient['name']}" if patient else "Гость",
+                    appt['status'],
+                    appt['office']
+                ))
 
     def update_payment_status_registry(self, appointment_id):
         # Обновление статуса оплаты в таблице регистратуры
@@ -653,8 +687,8 @@ class MainMenu(tk.Toplevel):
                 # Пример: обновление статуса (если есть соответствующий столбец)
                 # values[5] = "Оплачено"
                 self.tree.item(child, values=values)
-
-    # --- ОБРАБОТЧИКИ КНОПОК ---
+    
+    # --- ИНТЕРФЕЙС АДМИНИСТРАТОРА ---
     def open_add_doctor(self):
         AddDoctorWindow(self.app)
 
@@ -679,4 +713,6 @@ class MainMenu(tk.Toplevel):
 
     def open_payment(self):
         PaymentWindow(self.app, self.update_payment_status_registry)
+
+
 

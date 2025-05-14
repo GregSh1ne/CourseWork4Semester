@@ -55,7 +55,7 @@ class AuthWindow(tk.Toplevel):
         # Проверка администратора
         if normalized_phone == "+79991231122" and password == "321":
             self.app.current_user = {'role': 'admin', 'phone': normalized_phone}
-            self.app.show_main_menu("Администратор")
+            self.app.show_main_menu("Главный врач")
             self.destroy()
             return
         
