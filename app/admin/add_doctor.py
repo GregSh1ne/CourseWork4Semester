@@ -60,7 +60,7 @@ class AddDoctorWindow(tk.Toplevel):
             "name": self.entries["Имя"].get().strip(),
             "patronymic": self.entries["Отчество"].get().strip(),
             "phone": self.entries["Телефон"].get().strip(),
-            "password": self.entries["Пароль"].get().strip(),  # Новое поле
+            "password": self.entries["Пароль"].get().strip(),
             "specialization": self.entries["Специализация"].get().strip(),
             "qualification": self.entries["Квалификация"].get().strip(),
             "office": self.entries["Номер кабинета"].get().strip()

@@ -45,7 +45,7 @@ class RegistrationWindow(tk.Toplevel):
             'surname': self.entries['Фамилия'].get().strip(),
             'name': self.entries['Имя'].get().strip(),
             'patronymic': self.entries['Отчество'].get().strip(),
-            'birth_date': self.entries['Дата рождения'].get().strip(),
+            'birth_date': self.entries['Дата рождения (ДД.ММ.ГГГГ)'].get().strip(),
             'address': self.entries['Адрес'].get().strip()
         }
 
