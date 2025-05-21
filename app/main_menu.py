@@ -553,8 +553,6 @@ class MainMenu(tk.Toplevel):
         self.load_patient_appointments()
         messagebox.showinfo("Обновлено", "Статус приема обновлен")
 
-
-        # --- ИНТЕРФЕЙС Регистратуры ---
     
     # --- ИНТЕРФЕЙС РЕГИСТРАТУРЫ ---
     def show_registry_interface(self, parent):

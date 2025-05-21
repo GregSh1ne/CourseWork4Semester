@@ -190,6 +190,15 @@ class AddServiceWindow(tk.Toplevel):
             messagebox.showerror("Ошибка", "Обязательные поля: Название, Цена, Кабинет")
             return
         
+        # Проверка формата цены
+        try:
+            price = float(data['price'])
+            if price < 0:
+                raise ValueError
+        except ValueError:
+            messagebox.showerror("Ошибка", "Цена должна быть числом (например, 1000 или 1000.50)")
+            return
+        
         try:
             # Генерация нового ID
             services = read_csv("services.csv")
@@ -208,8 +217,7 @@ class AddServiceWindow(tk.Toplevel):
             
             messagebox.showinfo("Успех", "Услуга успешно добавлена!")
             self.destroy()
-            
-        except ValueError:
-            messagebox.showerror("Ошибка", "Некорректный формат цены")
+
+
         except Exception as e:
             messagebox.showerror("Ошибка", f"Ошибка сохранения: {str(e)}")

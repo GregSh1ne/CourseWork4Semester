@@ -1,29 +1,34 @@
 import csv
+import sys
+import os
 from pathlib import Path
 from typing import List, Dict
 
-# Путь к папке data (относительно расположения этого файла)
-DATA_DIR = Path(__file__).parent / "data"
+def resource_path(relative_path):
+    """Возвращает корректный путь для ресурсов в dev и .exe"""
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
 
 
-"""Читает данные из CSV-файла и возвращает список словарей."""
+# Обновляем путь к данным
+DATA_DIR = resource_path(str(Path(__file__).parent / "data"))  # <-- Изменено
+
+
 def read_csv(filename: str) -> List[Dict]:
-    file_path = DATA_DIR / filename
+    file_path = Path(DATA_DIR) / filename  # <-- Используем новый путь
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             return list(csv.DictReader(file))
     except FileNotFoundError:
-        return []  # Возвращаем пустой список, если файл не найден
+        return []
 
-"""Записывает данные в CSV-файл."""
 def write_csv(filename: str, data: List[Dict]):
-    file_path = DATA_DIR / filename
+    file_path = Path(DATA_DIR) / filename  # <-- Используем новый путь
     if not data:
-        return  # Не записываем пустые данные
+        return
 
-    # Извлекаем заголовки из первого элемента данных
     fieldnames = data[0].keys()
-    
     with open(file_path, "w", encoding="utf-8", newline="") as file:
         writer = csv.DictWriter(file, fieldnames=fieldnames)
         writer.writeheader()

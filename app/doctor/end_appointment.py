@@ -40,7 +40,17 @@ class EndAppointmentWindow(tk.Toplevel):
         if not diagnosis:
             messagebox.showerror("Ошибка", "Введите диагноз")
             return
-            
+        if not recommendations:
+            messagebox.showerror("Ошибка", "Введите описание (рекомендации)")
+            return
+        
+         # Проверка: если диагноз уже есть для этого приема — редактирование запрещено
+        diagnoses = read_csv("diagnoses.csv")
+        if any(d['appointment_id'] == self.appointment_id for d in diagnoses):
+            messagebox.showerror("Ошибка", "Диагноз для этого приема уже существует и не может быть изменен.")
+            self.destroy()
+            return
+
         try:
             # Создаем новую запись диагноза
             new_diagnosis = {
@@ -51,13 +61,12 @@ class EndAppointmentWindow(tk.Toplevel):
             }
             
             # Добавляем в CSV
-            diagnoses = read_csv("diagnoses.csv")
             diagnoses.append(new_diagnosis)
             write_csv("diagnoses.csv", diagnoses)
             
             messagebox.showinfo("Успех", "Прием успешно завершен")
             self.destroy()
-            self.main_menu.load_doctor_appointments()  # Теперь атрибут доступен
+            self.main_menu.load_doctor_appointments()
             
         except Exception as e:
             messagebox.showerror("Ошибка", f"Ошибка сохранения: {str(e)}")

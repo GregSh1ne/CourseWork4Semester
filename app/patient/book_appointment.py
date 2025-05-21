@@ -88,6 +88,17 @@ class BookAppointmentWindow(tk.Toplevel):
             service_name = service_str.split(' (')[0]
             service = next(s for s in services if s['service_name'] == service_name)
             
+            # Проверка занятости врача
+            appointments = read_csv("appointments.csv")
+            for appt in appointments:
+                if (
+                    appt['doctor_id'] == doctor['doctor_id'] and
+                    appt['date'] == date and
+                    appt['time'] == time
+                ):
+                    messagebox.showerror("Ошибка", "У выбранного врача уже есть запись на это время.")
+                    return
+            
             # Создаем запись
             new_appointment = {
                 "appointment_id": get_next_id("appointments.csv"),
